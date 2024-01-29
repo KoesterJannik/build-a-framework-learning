@@ -6,10 +6,10 @@ export function parseEnvFromRootDir(pathToFile: string = ".env") {
   const envFile = fs.readFileSync(pathToFile);
   //split by new line
   const envLines = envFile.toString().split("\n");
-  //now split by = and attach to process.env
-  envLines.forEach((envLine) => {
-    const [key, value] = envLine.split("=");
+  // split only by the first = sign
+  envLines.forEach((line) => {
+    const [key, ...rest] = line.split("=");
 
-    process.env[key] = value;
+    process.env[key] = rest.join("=");
   });
 }

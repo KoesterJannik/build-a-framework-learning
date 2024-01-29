@@ -138,7 +138,7 @@ export class BaseServer extends HttpHelper {
   joinSubRoutes(pathPrefix: string, routes: Array<Route>) {
     for (const route of routes) {
       const fullPath = pathPrefix + route.path;
-      console.log("Registering route:", fullPath);
+
       route.path = fullPath;
       this.routes.push(route);
     }
