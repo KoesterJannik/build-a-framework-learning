@@ -1,18 +1,11 @@
 import http from "http";
-type Route = {
-  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  path: string;
-  handler: (req: CustomIncommingRequest, res: CustomServerResponse) => void;
-};
-interface CustomServerResponse extends http.ServerResponse {
-  res: http.ServerResponse;
-  sendJson: (payload: any, statusCode?: number) => void;
-}
-interface CustomIncommingRequest extends http.IncomingMessage {
-  incomingPayload: any;
-}
+import {
+  CustomIncommingRequest,
+  CustomServerResponse,
+  Route,
+} from "./interfaces-types";
 
-class HttpHelper {
+export class HttpHelper {
   public routes: Array<Route>;
   constructor() {
     this.routes = [];
@@ -99,10 +92,7 @@ export class BaseServer extends HttpHelper {
       this.handleRequest(this.decorateRequest(req), this.decorateResponse(res))
     );
   }
-  private async handleRequest(
-    req: CustomIncommingRequest,
-    res: CustomServerResponse
-  ) {
+  async handleRequest(req: CustomIncommingRequest, res: CustomServerResponse) {
     try {
       const incomingData = await HttpHelper.attachIncomingJsonPayload(req);
       (req as any).incomingPayload = incomingData;
@@ -143,5 +133,14 @@ export class BaseServer extends HttpHelper {
   }
   listenAndServe(cb?: () => void) {
     this.server.listen(this.port, cb);
+  }
+
+  joinSubRoutes(pathPrefix: string, routes: Array<Route>) {
+    for (const route of routes) {
+      const fullPath = pathPrefix + route.path;
+      console.log("Registering route:", fullPath);
+      route.path = fullPath;
+      this.routes.push(route);
+    }
   }
 }
