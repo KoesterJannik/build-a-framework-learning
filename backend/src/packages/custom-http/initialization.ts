@@ -69,11 +69,15 @@ class HttpHelper {
       let body = "";
       req.on("data", (chunk) => (body += chunk));
       req.on("end", () => {
-        try {
-          const parsedBody = JSON.parse(body);
-          resolve(parsedBody);
-        } catch (error) {
-          reject(error);
+        if (body === "") {
+          resolve(null); // Resolve with null if no data was provided
+        } else {
+          try {
+            const parsedBody = JSON.parse(body);
+            resolve(parsedBody);
+          } catch (error) {
+            reject(error);
+          }
         }
       });
     });
@@ -103,11 +107,15 @@ export class BaseServer extends HttpHelper {
       const incomingData = await HttpHelper.attachIncomingJsonPayload(req);
       (req as any).incomingPayload = incomingData;
 
+      let routeNotFound = true;
+      let methodNotAllowed = false;
       // Iterate through registered routes and handle the request
       for (const route of this.routes) {
         if (req.url === route.path) {
+          routeNotFound = false;
           // check if the method matches
           if (req.method !== route.method) {
+            methodNotAllowed = true;
             // Handle 405 if the method doesn't match
             res.writeHead(405, { "Content-Type": "text/plain" });
             res.end("Method Not Allowed");
@@ -118,10 +126,14 @@ export class BaseServer extends HttpHelper {
           return;
         }
       }
-
-      // Handle 404 if no matching route is found
-      res.writeHead(404, { "Content-Type": "text/plain" });
-      res.end("Not Found");
+      if (routeNotFound) {
+        res.writeHead(404, { "Content-Type": "text/plain" });
+        res.end("Not Found");
+      }
+      if (methodNotAllowed) {
+        res.writeHead(405, { "Content-Type": "text/plain" });
+        res.end("Method Not Allowed");
+      }
     } catch (error) {
       console.error("Error parsing incoming JSON:", error);
 
