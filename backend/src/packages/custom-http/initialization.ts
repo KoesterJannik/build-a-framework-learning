@@ -1,0 +1,135 @@
+import http from "http";
+type Route = {
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  path: string;
+  handler: (req: CustomIncommingRequest, res: CustomServerResponse) => void;
+};
+interface CustomServerResponse extends http.ServerResponse {
+  res: http.ServerResponse;
+  sendJson: (payload: any, statusCode?: number) => void;
+}
+interface CustomIncommingRequest extends http.IncomingMessage {
+  incomingPayload: any;
+}
+
+class HttpHelper {
+  public routes: Array<Route>;
+  constructor() {
+    this.routes = [];
+  }
+  get(
+    path: string,
+    handler: (req: CustomIncommingRequest, res: CustomServerResponse) => void
+  ) {
+    this.routes.push({ path, handler, method: "GET" });
+  }
+  put(
+    path: string,
+    handler: (req: CustomIncommingRequest, res: CustomServerResponse) => void
+  ) {
+    this.routes.push({ path, handler, method: "PUT" });
+  }
+  post(
+    path: string,
+    handler: (req: CustomIncommingRequest, res: CustomServerResponse) => void
+  ) {
+    this.routes.push({ path, handler, method: "POST" });
+  }
+  patch(
+    path: string,
+    handler: (req: CustomIncommingRequest, res: CustomServerResponse) => void
+  ) {
+    this.routes.push({ path, handler, method: "PATCH" });
+  }
+  delete(
+    path: string,
+    handler: (req: CustomIncommingRequest, res: CustomServerResponse) => void
+  ) {
+    this.routes.push({ path, handler, method: "DELETE" });
+  }
+  sendJson(res: CustomServerResponse, payload: any, statusCode: number) {
+    res.setHeader("Content-Type", "application/json");
+    res.writeHead(statusCode);
+    res.end(JSON.stringify(payload));
+  }
+  decorateResponse(res: http.ServerResponse): CustomServerResponse {
+    const customRes = res as CustomServerResponse;
+    customRes.sendJson = (payload: any, statusCode: number = 200) =>
+      this.sendJson(customRes, payload, statusCode);
+    return customRes;
+  }
+  decorateRequest(req: http.IncomingMessage): CustomIncommingRequest {
+    const customReq = req as CustomIncommingRequest;
+    return customReq;
+  }
+  static async attachIncomingJsonPayload(
+    req: http.IncomingMessage
+  ): Promise<any> {
+    return new Promise((resolve, reject) => {
+      let body = "";
+      req.on("data", (chunk) => (body += chunk));
+      req.on("end", () => {
+        try {
+          const parsedBody = JSON.parse(body);
+          resolve(parsedBody);
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+  }
+}
+
+export class BaseServer extends HttpHelper {
+  public server: http.Server;
+  private middlewareStack: Array<Function>;
+
+  private port: number;
+  constructor(port: number) {
+    super();
+    this.server = http.createServer();
+    this.middlewareStack = [];
+
+    this.port = port;
+    this.server.on("request", (req, res) =>
+      this.handleRequest(this.decorateRequest(req), this.decorateResponse(res))
+    );
+  }
+  private async handleRequest(
+    req: CustomIncommingRequest,
+    res: CustomServerResponse
+  ) {
+    try {
+      const incomingData = await HttpHelper.attachIncomingJsonPayload(req);
+      (req as any).incomingPayload = incomingData;
+
+      // Iterate through registered routes and handle the request
+      for (const route of this.routes) {
+        if (req.url === route.path) {
+          // check if the method matches
+          if (req.method !== route.method) {
+            // Handle 405 if the method doesn't match
+            res.writeHead(405, { "Content-Type": "text/plain" });
+            res.end("Method Not Allowed");
+            return;
+          }
+          // Execute the route handler if the paths match
+          route.handler(req, res);
+          return;
+        }
+      }
+
+      // Handle 404 if no matching route is found
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("Not Found");
+    } catch (error) {
+      console.error("Error parsing incoming JSON:", error);
+
+      // Handle the error, e.g., send an error response
+      res.sendJson({ error: "Error parsing incoming JSON" }, 400);
+    }
+  }
+  listenAndServe(cb?: () => void) {
+    this.server.listen(this.port, cb);
+  }
+}
